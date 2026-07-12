@@ -1,0 +1,48 @@
+import type { Driver } from '../types';
+
+export const seedDrivers: Driver[] = [
+  {
+    id: 'd1',
+    name: 'Alex',
+    licenseNo: 'DL-88215',
+    category: 'LMV',
+    licenseExpiry: '12/2028',
+    contact: '98765xxxxx',
+    tripCompletion: 96,
+    safetyScore: 96,
+    status: 'Available',
+  },
+  {
+    id: 'd2',
+    name: 'John',
+    licenseNo: 'DL-44120',
+    category: 'HMV',
+    licenseExpiry: '03/2025',
+    contact: '99220xxxxx',
+    tripCompletion: 81,
+    safetyScore: 81,
+    status: 'Suspended',
+  },
+  {
+    id: 'd3',
+    name: 'Priya',
+    licenseNo: 'DL-77031',
+    category: 'LMV',
+    licenseExpiry: '08/2027',
+    contact: '98110xxxxx',
+    tripCompletion: 99,
+    safetyScore: 99,
+    status: 'On Trip',
+  },
+  {
+    id: 'd4',
+    name: 'Suresh',
+    licenseNo: 'DL-90045',
+    category: 'HMV',
+    licenseExpiry: '01/2027',
+    contact: '97440xxxxx',
+    tripCompletion: 88,
+    safetyScore: 88,
+    status: 'Available',
+  },
+];
