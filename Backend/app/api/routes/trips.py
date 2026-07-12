@@ -12,6 +12,7 @@ from app.models.user import User
 from app.repositories.trip import TripRepository
 from app.repositories.vehicle import VehicleRepository
 from app.repositories.driver import DriverRepository
+from app.repositories.maintenance import MaintenanceRepository
 from app.services.trip import TripService
 
 router = APIRouter()
@@ -20,7 +21,8 @@ def get_trip_service(db: Session = Depends(get_db)) -> TripService:
     return TripService(
         TripRepository(db),
         VehicleRepository(db),
-        DriverRepository(db)
+        DriverRepository(db),
+        MaintenanceRepository(db)
     )
 
 @router.post(

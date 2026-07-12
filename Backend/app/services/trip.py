@@ -6,15 +6,17 @@ from app.schemas.trip import TripCreate, TripUpdate, TripFilter, TripComplete
 from app.repositories.trip import TripRepository
 from app.repositories.vehicle import VehicleRepository
 from app.repositories.driver import DriverRepository
+from app.repositories.maintenance import MaintenanceRepository
 from app.models.vehicle import VehicleStatus
 from app.models.driver import DriverStatus
 from app.models.fuel_log import FuelLog
 
 class TripService:
-    def __init__(self, trip_repo: TripRepository, vehicle_repo: VehicleRepository, driver_repo: DriverRepository):
+    def __init__(self, trip_repo: TripRepository, vehicle_repo: VehicleRepository, driver_repo: DriverRepository, maintenance_repo: MaintenanceRepository = None):
         self.trip_repo = trip_repo
         self.vehicle_repo = vehicle_repo
         self.driver_repo = driver_repo
+        self.maintenance_repo = maintenance_repo
 
     def _validate_cargo_capacity(self, vehicle_id: int, cargo_weight: float):
         vehicle = self.vehicle_repo.get_by_id(vehicle_id)
@@ -136,6 +138,13 @@ class TripService:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Driver is not AVAILABLE.")
         if driver.license_expiry_date < date.today():
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Driver license is expired.")
+
+        # Rule 9: Vehicle must not have active maintenance
+        if self.maintenance_repo and self.maintenance_repo.has_active_maintenance(trip.vehicle_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Vehicle has active or scheduled maintenance. Cannot dispatch."
+            )
 
         self._validate_cargo_capacity(trip.vehicle_id, trip.cargo_weight_kg)
 

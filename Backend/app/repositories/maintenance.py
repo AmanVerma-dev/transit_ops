@@ -58,3 +58,11 @@ class MaintenanceRepository:
     def exists(self, maintenance_id: int) -> bool:
         maintenance = self.get_by_id(maintenance_id)
         return maintenance is not None
+
+    def has_active_maintenance(self, vehicle_id: int) -> bool:
+        """Check if a vehicle has any SCHEDULED or IN_PROGRESS maintenance."""
+        statement = select(Maintenance).where(
+            Maintenance.vehicle_id == vehicle_id,
+            Maintenance.status.in_([MaintenanceStatus.SCHEDULED, MaintenanceStatus.IN_PROGRESS])
+        )
+        return self.session.exec(statement).first() is not None

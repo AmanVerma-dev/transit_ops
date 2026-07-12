@@ -15,17 +15,17 @@ import requests
 import json
 from datetime import datetime, timedelta
 
-BASE_URL = "http://localhost:8000"
+BASE_URL = "http://127.0.0.1:8009"
 
 # Test credentials
-FLEET_MANAGER = {"username": "fleet_manager", "password": "FleetPass123!"}
-SAFETY_OFFICER = {"username": "safety_officer", "password": "SafetyPass123!"}
-FINANCIAL_ANALYST = {"username": "financial_analyst", "password": "FinancePass123!"}
-DRIVER = {"username": "driver_user", "password": "DriverPass123!"}
+FLEET_MANAGER = {"username": "manager@transitops.com", "password": "password123"}
+SAFETY_OFFICER = {"username": "safety@transitops.com", "password": "password123"}
+FINANCIAL_ANALYST = {"username": "finance@transitops.com", "password": "password123"}
+DRIVER = {"username": "driver@transitops.com", "password": "password123"}
 
 def get_token(credentials):
     """Get authentication token."""
-    response = requests.post(f"{BASE_URL}/auth/login", json=credentials)
+    response = requests.post(f"{BASE_URL}/auth/login", data=credentials)
     if response.status_code == 200:
         return response.json()["access_token"]
     else:
