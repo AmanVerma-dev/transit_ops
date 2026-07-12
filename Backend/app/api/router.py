@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.routes import health, auth, vehicles, drivers
+from app.api.routes import health, auth, vehicles, drivers, trips
 
 api_router = APIRouter()
 
@@ -8,3 +8,4 @@ api_router.include_router(health.router, tags=["health"])
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(vehicles.router, prefix="/vehicles", tags=["vehicles"])
 api_router.include_router(drivers.router, prefix="/drivers", tags=["drivers"])
+api_router.include_router(trips.router, prefix="/trips", tags=["trips"])
