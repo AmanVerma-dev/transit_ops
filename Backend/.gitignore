@@ -22,3 +22,7 @@ env/
 Thumbs.db
 
 *.db
+
+# AI Agents & Neon
+.neon/
+.agents/
