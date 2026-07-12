@@ -29,6 +29,19 @@ app.add_middleware(
 # Register master router
 app.include_router(api_router)
 
+from app.core.database import init_db, engine
+from sqlmodel import Session
+from app.seed.roles import seed_roles
+from app.seed.users import seed_users
+
 @app.on_event("startup")
 def on_startup() -> None:
+    logger.info("Initializing database schemas...")
+    init_db()
+    
+    logger.info("Seeding initial data...")
+    with Session(engine) as session:
+        seed_roles(session)
+        seed_users(session)
+
     logger.info("TransitOps Backend service started successfully.")
