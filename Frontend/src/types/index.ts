@@ -22,6 +22,7 @@ export interface Vehicle {
   odometer: number;
   acquisitionCost: number;
   status: VehicleStatus;
+  region?: string;
 }
 
 // ── Driver ──
@@ -35,7 +36,7 @@ export interface Driver {
   category: LicenseCategory;
   licenseExpiry: string;   // MM/YYYY
   contact: string;
-  tripCompletion: number;  // percentage
+  tripCompletion: number;  // percentage — computed client-side from trip data
   safetyScore: number;     // percentage
   status: DriverStatus;
 }
@@ -53,21 +54,28 @@ export interface Trip {
   plannedDistance: number;  // km
   actualDistance?: number;
   fuelConsumed?: number;
+  revenue?: number;
   status: TripStatus;
   eta?: string;
   createdAt: string;
 }
 
 // ── Maintenance ──
-export type MaintenanceStatus = 'In Shop' | 'Completed';
+export type MaintenanceStatus = 'Scheduled' | 'In Progress' | 'Completed' | 'Cancelled';
+export type MaintenanceType = 'Preventive' | 'Corrective' | 'Emergency' | 'Inspection';
 
 export interface MaintenanceLog {
   id: string;
   vehicleId: string;
   vehicleName: string;
-  serviceType: string;
-  cost: number;
-  date: string;
+  maintenanceType: MaintenanceType;
+  serviceType: string;       // description
+  estimatedCost: number;
+  actualCost?: number;
+  cost: number;              // display cost: actualCost ?? estimatedCost
+  scheduledDate: string;
+  date: string;              // formatted display date
+  technicianNotes?: string;
   status: MaintenanceStatus;
 }
 

@@ -1,21 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useDriversStore } from '../store/useDriversStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { StatusPill } from '../components/shared/StatusPill';
 import { isLicenseExpired } from '../lib/calculations';
-import type { LicenseCategory, DriverStatus } from '../types';
+import type { LicenseCategory } from '../types';
 import { X } from 'lucide-react';
 import { getPermission } from '../lib/rbac';
 import { driverSchema, LICENSE_CATEGORIES, type DriverFormValues } from '../schemas/driverSchema';
 
 export const DriversPage: React.FC = () => {
-  const { drivers, addDriver } = useDriversStore();
+  const { drivers, isLoading, fetchDrivers, addDriver } = useDriversStore();
   const userRole = useAuthStore(s => s.user?.role);
   const canManageDrivers = userRole ? getPermission(userRole, 'drivers') === 'full' : false;
   const [searchQuery, setSearchQuery] = useState('');
   const [showDialog, setShowDialog] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+
+  useEffect(() => {
+    fetchDrivers();
+  }, [fetchDrivers]);
 
   const {
     register,
@@ -35,19 +40,23 @@ export const DriversPage: React.FC = () => {
     return true;
   });
 
-  const onSubmit = (values: DriverFormValues) => {
-    addDriver({
-      name: values.name,
-      licenseNo: values.licenseNo,
-      category: values.category as LicenseCategory,
-      licenseExpiry: values.licenseExpiry,
-      contact: values.contact,
-      tripCompletion: 0,
-      safetyScore: 100,
-      status: 'Available' as DriverStatus,
-    });
-    reset();
-    setShowDialog(false);
+  const onSubmit = async (values: DriverFormValues) => {
+    setSubmitError('');
+    try {
+      await addDriver({
+        name: values.name,
+        licenseNo: values.licenseNo,
+        category: values.category as LicenseCategory,
+        licenseExpiry: values.licenseExpiry,
+        contact: values.contact,
+        safetyScore: 100,
+        status: 'Available',
+      });
+      reset();
+      setShowDialog(false);
+    } catch (err: any) {
+      setSubmitError(err.message || 'Failed to add driver.');
+    }
   };
 
   const inputClass =
@@ -57,7 +66,7 @@ export const DriversPage: React.FC = () => {
 
   return (
     <div>
-      <h1 className="text-base font-bold mb-4">Drivers &amp; Safety Profiles</h1>
+      <h1 className="text-base font-bold mb-4">Drivers &amp; Safety Profiles {isLoading && <span className="text-xs font-normal text-text-faint ml-2">(Loading...)</span>}</h1>
 
       {/* Filters */}
       <div className="flex gap-2.5 mb-4 flex-wrap items-center">
@@ -133,6 +142,12 @@ export const DriversPage: React.FC = () => {
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)}>
+              {submitError && (
+                <div className="border border-red bg-[rgba(226,88,92,0.14)] text-red rounded-lg px-3 py-2.5 text-xs mb-3 whitespace-pre-line">
+                  {submitError}
+                </div>
+              )}
+
               <div className="flex flex-col gap-3">
                 <div>
                   <label className={labelClass}>Name</label>

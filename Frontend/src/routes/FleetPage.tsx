@@ -1,17 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useFleetStore } from '../store/useFleetStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { StatusPill } from '../components/shared/StatusPill';
 import { formatCurrency } from '../lib/calculations';
-import type { VehicleType, VehicleStatus } from '../types';
+import type { VehicleType } from '../types';
 import { X } from 'lucide-react';
 import { getPermission } from '../lib/rbac';
 import { vehicleSchema, VEHICLE_TYPES, type VehicleFormValues } from '../schemas/vehicleSchema';
 
 export const FleetPage: React.FC = () => {
-  const { vehicles, addVehicle, isRegNoUnique } = useFleetStore();
+  const { vehicles, isLoading, fetchVehicles, addVehicle, isRegNoUnique } = useFleetStore();
   const userRole = useAuthStore(s => s.user?.role);
   const canManageFleet = userRole ? getPermission(userRole, 'fleet') === 'full' : false;
   const [typeFilter, setTypeFilter] = useState('All');
@@ -19,6 +19,10 @@ export const FleetPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showDialog, setShowDialog] = useState(false);
   const [submitError, setSubmitError] = useState('');
+
+  useEffect(() => {
+    fetchVehicles();
+  }, [fetchVehicles]);
 
   const {
     register,
@@ -39,25 +43,28 @@ export const FleetPage: React.FC = () => {
     return true;
   });
 
-  const onSubmit = (values: VehicleFormValues) => {
+  const onSubmit = async (values: VehicleFormValues) => {
     setSubmitError('');
     if (!isRegNoUnique(values.regNo)) {
       setSubmitError('Registration number must be unique.');
       return;
     }
     const cap = Number(values.capacity);
-    addVehicle({
-      regNo: values.regNo,
-      name: values.name,
-      type: values.type as VehicleType,
-      capacity: cap,
-      capacityLabel: cap >= 1000 ? `${cap / 1000} Ton` : `${cap} kg`,
-      odometer: Number(values.odometer),
-      acquisitionCost: Number(values.acquisitionCost),
-      status: 'Available' as VehicleStatus,
-    });
-    reset();
-    setShowDialog(false);
+    try {
+      await addVehicle({
+        regNo: values.regNo,
+        name: values.name,
+        type: values.type as VehicleType,
+        capacity: cap,
+        odometer: Number(values.odometer),
+        acquisitionCost: Number(values.acquisitionCost),
+        status: 'Available',
+      });
+      reset();
+      setShowDialog(false);
+    } catch (err: any) {
+      setSubmitError(err.message || 'Failed to add vehicle.');
+    }
   };
 
   const inputClass =
@@ -67,7 +74,7 @@ export const FleetPage: React.FC = () => {
 
   return (
     <div>
-      <h1 className="text-base font-bold mb-4">Vehicle Registry</h1>
+      <h1 className="text-base font-bold mb-4">Vehicle Registry {isLoading && <span className="text-xs font-normal text-text-faint ml-2">(Loading...)</span>}</h1>
 
       {/* Filters */}
       <div className="flex gap-2.5 mb-4 flex-wrap items-center">
@@ -151,7 +158,7 @@ export const FleetPage: React.FC = () => {
 
             <form onSubmit={handleSubmit(onSubmit)}>
               {submitError && (
-                <div className="border border-red bg-[rgba(226,88,92,0.14)] text-red rounded-lg px-3 py-2.5 text-xs mb-3">
+                <div className="border border-red bg-[rgba(226,88,92,0.14)] text-red rounded-lg px-3 py-2.5 text-xs mb-3 whitespace-pre-line">
                   {submitError}
                 </div>
               )}

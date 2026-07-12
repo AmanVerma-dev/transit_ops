@@ -6,18 +6,17 @@ import type { Role } from '../types';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, login } = useAuthStore();
+  const { isAuthenticated, user, login } = useAuthStore();
 
   // Redirect authenticated users away from login
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate(getDefaultRoute('Dispatcher'), { replace: true });
+    if (isAuthenticated && user) {
+      navigate(getDefaultRoute(user.role), { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, user, navigate]);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<Role>('Dispatcher');
   const [showError, setShowError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
@@ -93,19 +92,7 @@ export const LoginPage: React.FC = () => {
             className="w-full bg-panel-2 border border-border text-text py-2.5 px-3 rounded-md text-[13px] outline-none focus:border-orange transition-colors"
           />
 
-          <label className="text-[11px] text-text-faint uppercase tracking-wider block mt-3.5 mb-1.5">
-            Role (RBAC)
-          </label>
-          <select
-            value={role}
-            onChange={e => setRole(e.target.value as Role)}
-            className="w-full bg-panel-2 border border-border text-text py-2.5 px-3 rounded-md text-[13px] outline-none focus:border-orange transition-colors"
-          >
-            <option>Dispatcher</option>
-            <option>Fleet Manager</option>
-            <option>Safety Officer</option>
-            <option>Financial Analyst</option>
-          </select>
+
 
           <div className="flex justify-between items-center my-4 text-xs text-text-dim">
             <label className="flex items-center gap-1.5 cursor-pointer">

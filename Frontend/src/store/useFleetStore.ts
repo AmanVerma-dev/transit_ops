@@ -1,10 +1,18 @@
 import { create } from 'zustand';
 import type { Vehicle, VehicleStatus } from '../types';
-import { seedVehicles } from '../mock-data/vehicles';
+import { apiGet, apiPost, apiPut } from '../lib/apiClient';
+import { vehicleToFrontend, vehicleToBackend, type BackendVehicle } from '../lib/mappers/vehicleMapper';
+
+interface VehicleListResponse {
+  total: number;
+  items: BackendVehicle[];
+}
 
 interface FleetState {
   vehicles: Vehicle[];
-  addVehicle: (vehicle: Omit<Vehicle, 'id'>) => void;
+  isLoading: boolean;
+  fetchVehicles: () => Promise<void>;
+  addVehicle: (vehicle: Omit<Vehicle, 'id' | 'capacityLabel'>) => Promise<void>;
   updateVehicleStatus: (id: string, status: VehicleStatus) => void;
   updateVehicleOdometer: (id: string, odometer: number) => void;
   getAvailableVehicles: () => Vehicle[];
@@ -12,23 +20,38 @@ interface FleetState {
   isRegNoUnique: (regNo: string) => boolean;
 }
 
-let nextId = seedVehicles.length + 1;
-
 export const useFleetStore = create<FleetState>((set, get) => ({
-  vehicles: [...seedVehicles],
-  addVehicle: (vehicle) => {
-    const id = `v${nextId++}`;
+  vehicles: [],
+  isLoading: false,
+
+  fetchVehicles: async () => {
+    set({ isLoading: true });
+    try {
+      const data = await apiGet<VehicleListResponse>('/vehicles');
+      set({ vehicles: data.items.map(vehicleToFrontend), isLoading: false });
+    } catch {
+      set({ isLoading: false });
+    }
+  },
+
+  addVehicle: async (vehicle) => {
+    const payload = vehicleToBackend(vehicle);
+    const created = await apiPost<BackendVehicle>('/vehicles', payload);
+    const mapped = vehicleToFrontend(created);
     set(state => ({
-      vehicles: [...state.vehicles, { ...vehicle, id }],
+      vehicles: [...state.vehicles, mapped],
     }));
   },
+
   updateVehicleStatus: (id, status) => {
+    // Optimistic local update — backend handles status side-effects on trips/maintenance
     set(state => ({
       vehicles: state.vehicles.map(v =>
         v.id === id ? { ...v, status } : v
       ),
     }));
   },
+
   updateVehicleOdometer: (id, odometer) => {
     set(state => ({
       vehicles: state.vehicles.map(v =>
@@ -36,12 +59,15 @@ export const useFleetStore = create<FleetState>((set, get) => ({
       ),
     }));
   },
+
   getAvailableVehicles: () => {
     return get().vehicles.filter(v => v.status === 'Available');
   },
+
   getVehicleById: (id) => {
     return get().vehicles.find(v => v.id === id);
   },
+
   isRegNoUnique: (regNo) => {
     return !get().vehicles.some(v => v.regNo.toLowerCase() === regNo.toLowerCase());
   },

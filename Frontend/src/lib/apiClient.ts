@@ -1,6 +1,6 @@
 import type { User, Role } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
 export interface TokenResponse {
   access_token: string;
@@ -64,6 +64,8 @@ export function clearStoredToken(): void {
   localStorage.removeItem('transitops_token');
 }
 
+// ── Generic request helpers ──
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getStoredToken();
   const headers: HeadersInit = {
@@ -80,6 +82,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      clearStoredToken();
+      window.location.href = '/login';
+    }
     const errorData = await response.json().catch(() => ({}));
     const message = errorData.detail || errorData.message || `Request failed: ${response.status}`;
     throw new Error(message);
@@ -87,6 +93,58 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   return response.json();
 }
+
+/** Fire a DELETE and return nothing (expects 204). */
+async function requestNoContent(path: string, options: RequestInit = {}): Promise<void> {
+  const token = getStoredToken();
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+  if (token) {
+    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers,
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      clearStoredToken();
+      window.location.href = '/login';
+    }
+    const errorData = await response.json().catch(() => ({}));
+    const message = errorData.detail || errorData.message || `Request failed: ${response.status}`;
+    throw new Error(message);
+  }
+}
+
+export function apiGet<T>(path: string): Promise<T> {
+  return request<T>(path);
+}
+
+export function apiPost<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, { method: 'POST', body: JSON.stringify(body) });
+}
+
+export function apiPut<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, { method: 'PUT', body: JSON.stringify(body) });
+}
+
+export function apiPatch<T>(path: string, body?: unknown): Promise<T> {
+  return request<T>(path, {
+    method: 'PATCH',
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+}
+
+export function apiDelete(path: string): Promise<void> {
+  return requestNoContent(path, { method: 'DELETE' });
+}
+
+// ── Auth-specific helpers ──
 
 export async function login(email: string, password: string): Promise<TokenResponse> {
   const formData = new URLSearchParams();

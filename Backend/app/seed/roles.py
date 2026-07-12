@@ -5,7 +5,7 @@ from app.repositories.role import RoleRepository
 
 logger = logging.getLogger("transitops.seed")
 
-DEFAULT_ROLES = ["Fleet Manager", "Driver", "Safety Officer", "Financial Analyst"]
+DEFAULT_ROLES = ["Fleet Manager", "Driver", "Dispatcher", "Safety Officer", "Financial Analyst"]
 
 def seed_roles(session: Session) -> None:
     """Seed the default roles in the database."""
