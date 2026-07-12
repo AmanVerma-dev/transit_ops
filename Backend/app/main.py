@@ -43,7 +43,7 @@ app.add_middleware(
 )
 
 # Register master router
-app.include_router(api_router, prefix=settings.API_V1_STR)
+app.include_router(api_router)
 
 from app.core.database import init_db, engine
 from sqlmodel import Session

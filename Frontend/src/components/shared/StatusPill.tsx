@@ -10,13 +10,11 @@ const STATUS_COLOR_MAP: Record<string, PillColor> = {
   // Blue
   'On Trip': 'blue',
   'Dispatched': 'blue',
-  'In Progress': 'blue',
   // Amber
   'In Shop': 'amber',
   'Suspended': 'amber',
   'Draft': 'amber',
   'Off Duty': 'amber',
-  'Scheduled': 'amber',
   // Red
   'Retired': 'red',
   'Cancelled': 'red',

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTripsStore } from '../store/useTripsStore';
@@ -12,9 +12,9 @@ import { X } from 'lucide-react';
 import { tripSchema, type TripFormValues } from '../schemas/tripSchema';
 
 export const TripsPage: React.FC = () => {
-  const { trips, isLoading, fetchTrips, createTrip, dispatchTrip, completeTrip, cancelTrip } = useTripsStore();
-  const { vehicles, fetchVehicles, getAvailableVehicles } = useFleetStore();
-  const { drivers, fetchDrivers, getAvailableDrivers } = useDriversStore();
+  const { trips, createTrip, dispatchTrip, completeTrip, cancelTrip } = useTripsStore();
+  const { vehicles, getAvailableVehicles } = useFleetStore();
+  const { drivers, getAvailableDrivers } = useDriversStore();
   const userRole = useAuthStore(s => s.user?.role);
   const canManageTrips = userRole ? getPermission(userRole, 'trips') === 'full' : false;
 
@@ -23,13 +23,6 @@ export const TripsPage: React.FC = () => {
   const [finalOdometer, setFinalOdometer] = useState('');
   const [fuelConsumed, setFuelConsumed] = useState('');
   const [submitError, setSubmitError] = useState('');
-  const [actionError, setActionError] = useState('');
-
-  useEffect(() => {
-    fetchVehicles();
-    fetchDrivers();
-    fetchTrips();
-  }, [fetchVehicles, fetchDrivers, fetchTrips]);
 
   const {
     register,
@@ -78,41 +71,25 @@ export const TripsPage: React.FC = () => {
     return errors;
   }, [selectedVehicleId, selectedDriverId, selectedVehicle, selectedDriver, watch('cargoWeight')]);
 
-  const onSubmit = async (values: TripFormValues) => {
+  const onSubmit = (values: TripFormValues) => {
     setSubmitError('');
     if (validationErrors.length > 0) {
       setSubmitError(validationErrors.join('\n'));
       return;
     }
-    try {
-      await createTrip({
-        source: values.source,
-        destination: values.destination,
-        vehicleId: values.vehicleId,
-        driverId: values.driverId,
-        cargoWeight: Number(values.cargoWeight),
-        plannedDistance: Number(values.plannedDistance),
-        eta: `${Math.round(Number(values.plannedDistance) / 60 * 60)} min`,
-      });
-      // The store just created the trip on the backend, which defaults to DRAFT.
-      // Now we automatically dispatch it, finding the newest draft trip.
-      const lastTrip = useTripsStore.getState().trips.findLast(t => t.status === 'Draft');
-      if (lastTrip) {
-        await dispatchTrip(lastTrip.id);
-      }
-      reset();
-    } catch (err: any) {
-      setSubmitError(err.message || 'Failed to create and dispatch trip.');
-    }
-  };
-
-  const handleAction = async (action: () => Promise<void>) => {
-    setActionError('');
-    try {
-      await action();
-    } catch (err: any) {
-      setActionError(err.message || 'Action failed.');
-    }
+    createTrip({
+      source: values.source,
+      destination: values.destination,
+      vehicleId: values.vehicleId,
+      driverId: values.driverId,
+      cargoWeight: Number(values.cargoWeight),
+      plannedDistance: Number(values.plannedDistance),
+      eta: `${Math.round(Number(values.plannedDistance) / 60 * 60)} min`,
+    });
+    // Dispatch the last created trip
+    const lastTrip = useTripsStore.getState().trips[useTripsStore.getState().trips.length - 1];
+    dispatchTrip(lastTrip.id);
+    reset();
   };
 
   const handleComplete = (tripId: string) => {
@@ -122,16 +99,10 @@ export const TripsPage: React.FC = () => {
     setFuelConsumed('');
   };
 
-  const handleCompleteSubmit = async () => {
+  const handleCompleteSubmit = () => {
     if (!finalOdometer || !fuelConsumed) return;
-    setActionError('');
-    try {
-      await completeTrip(completingTripId, parseInt(finalOdometer), parseFloat(fuelConsumed));
-      setShowCompleteDialog(false);
-    } catch (err: any) {
-      setActionError(err.message || 'Failed to complete trip.');
-      setShowCompleteDialog(false);
-    }
+    completeTrip(completingTripId, parseInt(finalOdometer), parseFloat(fuelConsumed));
+    setShowCompleteDialog(false);
   };
 
   const getVehicleName = (id: string | null) => vehicles.find(v => v.id === id)?.name || 'Unassigned';
@@ -146,13 +117,7 @@ export const TripsPage: React.FC = () => {
 
   return (
     <div>
-      <h1 className="text-base font-bold mb-4">Trip Dispatcher {isLoading && <span className="text-xs font-normal text-text-faint ml-2">(Loading...)</span>}</h1>
-
-      {actionError && (
-        <div className="border border-red bg-[rgba(226,88,92,0.14)] text-red rounded-lg px-3.5 py-3 text-xs mb-4 whitespace-pre-line">
-          {actionError}
-        </div>
-      )}
+      <h1 className="text-base font-bold mb-4">Trip Dispatcher</h1>
 
       {/* Lifecycle stepper */}
       <div className="bg-panel-2 border border-border rounded-lg p-3.5 mb-4">
@@ -270,14 +235,14 @@ export const TripsPage: React.FC = () => {
               {/* Action buttons */}
               {canManageTrips && trip.status === 'Draft' && (
                 <div className="flex gap-2 mt-2">
-                  <button onClick={() => handleAction(() => dispatchTrip(trip.id))} className="bg-blue/20 text-blue border-none py-1 px-2 rounded text-[10px] font-bold cursor-pointer hover:bg-blue/30">Dispatch</button>
-                  <button onClick={() => handleAction(() => cancelTrip(trip.id))} className="bg-red/20 text-red border-none py-1 px-2 rounded text-[10px] font-bold cursor-pointer hover:bg-red/30">Cancel</button>
+                  <button onClick={() => dispatchTrip(trip.id)} className="bg-blue/20 text-blue border-none py-1 px-2 rounded text-[10px] font-bold cursor-pointer hover:bg-blue/30">Dispatch</button>
+                  <button onClick={() => cancelTrip(trip.id)} className="bg-red/20 text-red border-none py-1 px-2 rounded text-[10px] font-bold cursor-pointer hover:bg-red/30">Cancel</button>
                 </div>
               )}
               {canManageTrips && trip.status === 'Dispatched' && (
                 <div className="flex gap-2 mt-2">
                   <button onClick={() => handleComplete(trip.id)} className="bg-green/20 text-green border-none py-1 px-2 rounded text-[10px] font-bold cursor-pointer hover:bg-green/30">Complete</button>
-                  <button onClick={() => handleAction(() => cancelTrip(trip.id))} className="bg-red/20 text-red border-none py-1 px-2 rounded text-[10px] font-bold cursor-pointer hover:bg-red/30">Cancel</button>
+                  <button onClick={() => cancelTrip(trip.id)} className="bg-red/20 text-red border-none py-1 px-2 rounded text-[10px] font-bold cursor-pointer hover:bg-red/30">Cancel</button>
                 </div>
               )}
             </div>

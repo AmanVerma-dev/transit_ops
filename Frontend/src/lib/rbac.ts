@@ -34,9 +34,7 @@ export function getPermission(role: Role, module: RouteModule): PermissionLevel 
 }
 
 export function canAccessRoute(role: Role, path: string): boolean {
-  // Extract the base route, e.g. "/fleet/123" -> "/fleet"
-  const baseRoute = '/' + path.split('/')[1];
-  const module = ROUTE_TO_MODULE[baseRoute];
+  const module = ROUTE_TO_MODULE[path];
   if (!module) return true;
   return getPermission(role, module) !== 'none';
 }

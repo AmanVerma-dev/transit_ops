@@ -35,7 +35,7 @@ def get_trip_service(db: Session = Depends(get_db)) -> TripService:
 def create_trip(
     trip_in: TripCreate,
     service: TripService = Depends(get_trip_service),
-    current_user: User = Depends(require_roles(["Fleet Manager", "Driver", "Dispatcher"]))
+    current_user: User = Depends(require_roles(["Fleet Manager", "Driver"]))
 ) -> Any:
     return service.create_trip(trip_in, created_by=current_user.id)
 
@@ -76,10 +76,10 @@ def update_trip(
     trip_id: int,
     trip_update: TripUpdate,
     service: TripService = Depends(get_trip_service),
-    current_user: User = Depends(require_roles(["Fleet Manager", "Driver", "Dispatcher"]))
+    current_user: User = Depends(require_roles(["Fleet Manager", "Driver"]))
 ) -> Any:
     user_role = current_user.role.name if current_user.role else ""
-    is_admin = user_role in ("Fleet Manager", "Dispatcher")
+    is_admin = user_role == "Fleet Manager"
     return service.update_trip(trip_id, trip_update, current_user.id, is_admin)
 
 @router.delete(
@@ -104,10 +104,10 @@ def delete_trip(
 def dispatch_trip(
     trip_id: int,
     service: TripService = Depends(get_trip_service),
-    current_user: User = Depends(require_roles(["Fleet Manager", "Driver", "Dispatcher"]))
+    current_user: User = Depends(require_roles(["Fleet Manager", "Driver"]))
 ) -> Any:
     user_role = current_user.role.name if current_user.role else ""
-    is_admin = user_role in ("Fleet Manager", "Dispatcher")
+    is_admin = user_role == "Fleet Manager"
     return service.dispatch_trip(trip_id, current_user.id, is_admin)
 
 @router.patch(
@@ -120,10 +120,10 @@ def complete_trip(
     trip_id: int,
     completion_data: TripComplete,
     service: TripService = Depends(get_trip_service),
-    current_user: User = Depends(require_roles(["Fleet Manager", "Driver", "Dispatcher"]))
+    current_user: User = Depends(require_roles(["Fleet Manager", "Driver"]))
 ) -> Any:
     user_role = current_user.role.name if current_user.role else ""
-    is_admin = user_role in ("Fleet Manager", "Dispatcher")
+    is_admin = user_role == "Fleet Manager"
     return service.complete_trip(trip_id, completion_data, current_user.id, is_admin)
 
 @router.patch(
@@ -135,8 +135,8 @@ def complete_trip(
 def cancel_trip(
     trip_id: int,
     service: TripService = Depends(get_trip_service),
-    current_user: User = Depends(require_roles(["Fleet Manager", "Driver", "Dispatcher"]))
+    current_user: User = Depends(require_roles(["Fleet Manager", "Driver"]))
 ) -> Any:
     user_role = current_user.role.name if current_user.role else ""
-    is_admin = user_role in ("Fleet Manager", "Dispatcher")
+    is_admin = user_role == "Fleet Manager"
     return service.cancel_trip(trip_id, current_user.id, is_admin)
