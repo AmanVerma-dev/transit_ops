@@ -1,67 +1,71 @@
 import React, { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useFinanceStore } from '../store/useFinanceStore';
 import { useMaintenanceStore } from '../store/useMaintenanceStore';
 import { useFleetStore } from '../store/useFleetStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { StatusPill } from '../components/shared/StatusPill';
 import { formatCurrency, totalOperationalCost } from '../lib/calculations';
 import { X } from 'lucide-react';
+import { getPermission } from '../lib/rbac';
+import { fuelSchema, type FuelFormValues } from '../schemas/fuelSchema';
+import { expenseSchema, type ExpenseFormValues } from '../schemas/expenseSchema';
 
 export const FuelExpensesPage: React.FC = () => {
   const { fuelLogs, expenses, addFuelLog, addExpense } = useFinanceStore();
   const maintenanceLogs = useMaintenanceStore(s => s.logs);
   const vehicles = useFleetStore(s => s.vehicles);
+  const userRole = useAuthStore(s => s.user?.role);
+  const canManageFuel = userRole ? getPermission(userRole, 'fuelExp') === 'full' : false;
 
   const [showFuelDialog, setShowFuelDialog] = useState(false);
   const [showExpenseDialog, setShowExpenseDialog] = useState(false);
 
-  // Fuel form
-  const [fVehicleId, setFVehicleId] = useState('');
-  const [fDate, setFDate] = useState('');
-  const [fLiters, setFLiters] = useState('');
-  const [fCost, setFCost] = useState('');
-  const [fError, setFError] = useState('');
-
-  // Expense form
-  const [eTripId, setETripId] = useState('');
-  const [eVehicleId, setEVehicleId] = useState('');
-  const [eToll, setEToll] = useState('');
-  const [eOther, setEOther] = useState('');
-  const [eError, setEError] = useState('');
+  const fuelForm = useForm<FuelFormValues>({
+    resolver: zodResolver(fuelSchema),
+    defaultValues: { vehicleId: '', date: '', liters: '', cost: '' },
+  });
+  const expenseForm = useForm<ExpenseFormValues>({
+    resolver: zodResolver(expenseSchema),
+    defaultValues: { tripId: '', vehicleId: '', toll: '', other: '' },
+  });
 
   const opCost = totalOperationalCost(fuelLogs, maintenanceLogs);
 
-  const handleAddFuel = () => {
-    setFError('');
-    if (!fVehicleId || !fDate || !fLiters || !fCost) { setFError('All fields are required.'); return; }
-    const vehicle = vehicles.find(v => v.id === fVehicleId);
+  const onAddFuel = (values: FuelFormValues) => {
+    const vehicle = vehicles.find(v => v.id === values.vehicleId);
     addFuelLog({
       id: `f${Date.now()}`,
-      vehicleId: fVehicleId,
+      vehicleId: values.vehicleId,
       vehicleName: vehicle?.name || '',
-      date: fDate,
-      liters: parseFloat(fLiters),
-      cost: parseInt(fCost),
+      date: values.date,
+      liters: Number(values.liters),
+      cost: Number(values.cost),
     });
+    fuelForm.reset();
     setShowFuelDialog(false);
-    setFVehicleId(''); setFDate(''); setFLiters(''); setFCost('');
   };
 
-  const handleAddExpense = () => {
-    setEError('');
-    if (!eTripId || !eVehicleId) { setEError('Trip and Vehicle are required.'); return; }
-    const vehicle = vehicles.find(v => v.id === eVehicleId);
+  const onAddExpense = (values: ExpenseFormValues) => {
+    const vehicle = vehicles.find(v => v.id === values.vehicleId);
     addExpense({
-      tripId: eTripId,
-      vehicleId: eVehicleId,
+      tripId: values.tripId,
+      vehicleId: values.vehicleId,
       vehicleName: vehicle?.name || '',
-      toll: parseInt(eToll) || 0,
-      other: parseInt(eOther) || 0,
+      toll: Number(values.toll) || 0,
+      other: Number(values.other) || 0,
       maintenanceLinked: 0,
       status: 'Available',
     });
+    expenseForm.reset();
     setShowExpenseDialog(false);
-    setETripId(''); setEVehicleId(''); setEToll(''); setEOther('');
   };
+
+  const inputClass =
+    'w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange';
+  const labelClass = 'text-[10px] uppercase text-text-faint tracking-wider mb-1 block';
+  const fieldErrorClass = 'text-red text-[11px] mt-1';
 
   return (
     <div>
@@ -72,18 +76,22 @@ export const FuelExpensesPage: React.FC = () => {
         <div className="flex items-center mb-3.5">
           <div className="text-xs text-text-dim uppercase tracking-wider font-bold">Fuel Logs</div>
           <div className="flex-1" />
-          <button
-            onClick={() => setShowFuelDialog(true)}
-            className="bg-panel-2 text-text-dim border border-border py-2 px-3 rounded-md font-bold text-[12.5px] cursor-pointer hover:text-text transition-colors mr-2"
-          >
-            + Log Fuel
-          </button>
-          <button
-            onClick={() => setShowExpenseDialog(true)}
-            className="bg-orange text-[#1a0f02] border-none py-2 px-3 rounded-md font-bold text-[12.5px] cursor-pointer hover:bg-orange-hover transition-colors"
-          >
-            + Add Expense
-          </button>
+          {canManageFuel && (
+            <>
+              <button
+                onClick={() => setShowFuelDialog(true)}
+                className="bg-panel-2 text-text-dim border border-border py-2 px-3 rounded-md font-bold text-[12.5px] cursor-pointer hover:text-text transition-colors mr-2"
+              >
+                + Log Fuel
+              </button>
+              <button
+                onClick={() => setShowExpenseDialog(true)}
+                className="bg-orange text-[#1a0f02] border-none py-2 px-3 rounded-md font-bold text-[12.5px] cursor-pointer hover:bg-orange-hover transition-colors"
+              >
+                + Add Expense
+              </button>
+            </>
+          )}
         </div>
         <table className="w-full border-collapse text-xs">
           <thead>
@@ -146,32 +154,37 @@ export const FuelExpensesPage: React.FC = () => {
               <h2 className="text-sm font-bold">Log Fuel</h2>
               <button onClick={() => setShowFuelDialog(false)} className="text-text-faint hover:text-text cursor-pointer bg-transparent border-none"><X size={16} /></button>
             </div>
-            {fError && <div className="border border-red bg-[rgba(226,88,92,0.14)] text-red rounded-lg px-3 py-2.5 text-xs mb-3">{fError}</div>}
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Vehicle</label>
-                <select value={fVehicleId} onChange={e => setFVehicleId(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange">
-                  <option value="">Select...</option>
-                  {vehicles.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                </select>
+            <form onSubmit={fuelForm.handleSubmit(onAddFuel)}>
+              <div className="flex flex-col gap-3">
+                <div>
+                  <label className={labelClass}>Vehicle</label>
+                  <select {...fuelForm.register('vehicleId')} className={inputClass}>
+                    <option value="">Select...</option>
+                    {vehicles.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  </select>
+                  {fuelForm.formState.errors.vehicleId && <div className={fieldErrorClass}>{fuelForm.formState.errors.vehicleId.message}</div>}
+                </div>
+                <div>
+                  <label className={labelClass}>Date</label>
+                  <input {...fuelForm.register('date')} placeholder="DD Mon YYYY" className={inputClass} />
+                  {fuelForm.formState.errors.date && <div className={fieldErrorClass}>{fuelForm.formState.errors.date.message}</div>}
+                </div>
+                <div>
+                  <label className={labelClass}>Liters</label>
+                  <input type="number" {...fuelForm.register('liters')} className={inputClass} />
+                  {fuelForm.formState.errors.liters && <div className={fieldErrorClass}>{fuelForm.formState.errors.liters.message}</div>}
+                </div>
+                <div>
+                  <label className={labelClass}>Cost</label>
+                  <input type="number" {...fuelForm.register('cost')} className={inputClass} />
+                  {fuelForm.formState.errors.cost && <div className={fieldErrorClass}>{fuelForm.formState.errors.cost.message}</div>}
+                </div>
               </div>
-              <div>
-                <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Date</label>
-                <input value={fDate} onChange={e => setFDate(e.target.value)} placeholder="DD Mon YYYY" className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
+              <div className="flex gap-2.5 mt-4">
+                <button type="submit" className="bg-orange text-[#1a0f02] border-none py-2 px-4 rounded-md font-bold text-[12.5px] cursor-pointer hover:bg-orange-hover transition-colors">Save</button>
+                <button type="button" onClick={() => setShowFuelDialog(false)} className="bg-panel-2 text-text-dim border border-border py-2 px-4 rounded-md text-[12.5px] cursor-pointer hover:text-text transition-colors">Cancel</button>
               </div>
-              <div>
-                <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Liters</label>
-                <input type="number" value={fLiters} onChange={e => setFLiters(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
-              </div>
-              <div>
-                <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Cost</label>
-                <input type="number" value={fCost} onChange={e => setFCost(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
-              </div>
-            </div>
-            <div className="flex gap-2.5 mt-4">
-              <button onClick={handleAddFuel} className="bg-orange text-[#1a0f02] border-none py-2 px-4 rounded-md font-bold text-[12.5px] cursor-pointer hover:bg-orange-hover transition-colors">Save</button>
-              <button onClick={() => setShowFuelDialog(false)} className="bg-panel-2 text-text-dim border border-border py-2 px-4 rounded-md text-[12.5px] cursor-pointer hover:text-text transition-colors">Cancel</button>
-            </div>
+            </form>
           </div>
         </div>
       )}
@@ -184,32 +197,37 @@ export const FuelExpensesPage: React.FC = () => {
               <h2 className="text-sm font-bold">Add Expense</h2>
               <button onClick={() => setShowExpenseDialog(false)} className="text-text-faint hover:text-text cursor-pointer bg-transparent border-none"><X size={16} /></button>
             </div>
-            {eError && <div className="border border-red bg-[rgba(226,88,92,0.14)] text-red rounded-lg px-3 py-2.5 text-xs mb-3">{eError}</div>}
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Trip ID</label>
-                <input value={eTripId} onChange={e => setETripId(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
+            <form onSubmit={expenseForm.handleSubmit(onAddExpense)}>
+              <div className="flex flex-col gap-3">
+                <div>
+                  <label className={labelClass}>Trip ID</label>
+                  <input {...expenseForm.register('tripId')} className={inputClass} />
+                  {expenseForm.formState.errors.tripId && <div className={fieldErrorClass}>{expenseForm.formState.errors.tripId.message}</div>}
+                </div>
+                <div>
+                  <label className={labelClass}>Vehicle</label>
+                  <select {...expenseForm.register('vehicleId')} className={inputClass}>
+                    <option value="">Select...</option>
+                    {vehicles.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  </select>
+                  {expenseForm.formState.errors.vehicleId && <div className={fieldErrorClass}>{expenseForm.formState.errors.vehicleId.message}</div>}
+                </div>
+                <div>
+                  <label className={labelClass}>Toll</label>
+                  <input type="number" {...expenseForm.register('toll')} className={inputClass} />
+                  {expenseForm.formState.errors.toll && <div className={fieldErrorClass}>{expenseForm.formState.errors.toll.message}</div>}
+                </div>
+                <div>
+                  <label className={labelClass}>Other</label>
+                  <input type="number" {...expenseForm.register('other')} className={inputClass} />
+                  {expenseForm.formState.errors.other && <div className={fieldErrorClass}>{expenseForm.formState.errors.other.message}</div>}
+                </div>
               </div>
-              <div>
-                <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Vehicle</label>
-                <select value={eVehicleId} onChange={e => setEVehicleId(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange">
-                  <option value="">Select...</option>
-                  {vehicles.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                </select>
+              <div className="flex gap-2.5 mt-4">
+                <button type="submit" className="bg-orange text-[#1a0f02] border-none py-2 px-4 rounded-md font-bold text-[12.5px] cursor-pointer hover:bg-orange-hover transition-colors">Save</button>
+                <button type="button" onClick={() => setShowExpenseDialog(false)} className="bg-panel-2 text-text-dim border border-border py-2 px-4 rounded-md text-[12.5px] cursor-pointer hover:text-text transition-colors">Cancel</button>
               </div>
-              <div>
-                <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Toll</label>
-                <input type="number" value={eToll} onChange={e => setEToll(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
-              </div>
-              <div>
-                <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Other</label>
-                <input type="number" value={eOther} onChange={e => setEOther(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
-              </div>
-            </div>
-            <div className="flex gap-2.5 mt-4">
-              <button onClick={handleAddExpense} className="bg-orange text-[#1a0f02] border-none py-2 px-4 rounded-md font-bold text-[12.5px] cursor-pointer hover:bg-orange-hover transition-colors">Save</button>
-              <button onClick={() => setShowExpenseDialog(false)} className="bg-panel-2 text-text-dim border border-border py-2 px-4 rounded-md text-[12.5px] cursor-pointer hover:text-text transition-colors">Cancel</button>
-            </div>
+            </form>
           </div>
         </div>
       )}

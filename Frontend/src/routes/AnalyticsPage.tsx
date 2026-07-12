@@ -88,7 +88,7 @@ export const AnalyticsPage: React.FC = () => {
         ROI = (Revenue − (Maintenance + Fuel)) / Acquisition Cost
       </div>
 
-      <div className="grid grid-cols-[1.6fr_1fr] gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-[1.6fr_1fr] gap-4">
         {/* Monthly Revenue Chart */}
         <div className="bg-panel-2 border border-border rounded-lg p-3.5">
           <div className="flex justify-between items-center mb-3">

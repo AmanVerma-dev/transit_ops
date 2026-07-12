@@ -1,82 +1,102 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useMaintenanceStore } from '../store/useMaintenanceStore';
 import { useFleetStore } from '../store/useFleetStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { StatusPill } from '../components/shared/StatusPill';
 import { formatCurrency } from '../lib/calculations';
+import { getPermission } from '../lib/rbac';
+import { serviceRecordSchema, type ServiceRecordFormValues } from '../schemas/serviceRecordSchema';
 
 export const MaintenancePage: React.FC = () => {
   const { logs, addRecord, completeRecord } = useMaintenanceStore();
   const vehicles = useFleetStore(s => s.vehicles);
+  const userRole = useAuthStore(s => s.user?.role);
+  // Maintenance inherits the fleet permission per getPermission() in rbac.ts.
+  const canManageFleet = userRole ? getPermission(userRole, 'fleet') === 'full' : false;
 
-  const [formVehicleId, setFormVehicleId] = useState('');
-  const [formServiceType, setFormServiceType] = useState('');
-  const [formCost, setFormCost] = useState('');
-  const [formDate, setFormDate] = useState('');
-  const [formError, setFormError] = useState('');
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<ServiceRecordFormValues>({
+    resolver: zodResolver(serviceRecordSchema),
+    defaultValues: { vehicleId: '', serviceType: '', cost: '', date: '' },
+  });
 
-  const handleSave = () => {
-    setFormError('');
-    if (!formVehicleId || !formServiceType || !formCost || !formDate) {
-      setFormError('All fields are required.');
-      return;
-    }
-    const vehicle = vehicles.find(v => v.id === formVehicleId);
+  const onSubmit = (values: ServiceRecordFormValues) => {
+    const vehicle = vehicles.find(v => v.id === values.vehicleId);
     addRecord({
-      vehicleId: formVehicleId,
+      vehicleId: values.vehicleId,
       vehicleName: vehicle?.name || '',
-      serviceType: formServiceType,
-      cost: parseInt(formCost),
-      date: formDate,
+      serviceType: values.serviceType,
+      cost: Number(values.cost),
+      date: values.date,
       status: 'In Shop',
     });
-    setFormVehicleId(''); setFormServiceType(''); setFormCost(''); setFormDate('');
+    reset();
   };
+
+  const inputClass =
+    'w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange';
+  const labelClass = 'text-[10px] uppercase text-text-faint tracking-wider mb-1 block';
+  const fieldErrorClass = 'text-red text-[11px] mt-1';
 
   return (
     <div>
       <h1 className="text-base font-bold mb-4">Maintenance</h1>
 
-      <div className="grid grid-cols-[1.6fr_1fr] gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-[1.6fr_1fr] gap-4">
         {/* Log Service Record */}
         <div className="bg-panel-2 border border-border rounded-lg p-3.5">
           <div className="text-xs text-text-dim uppercase tracking-wider mb-3 font-bold">Log Service Record</div>
 
-          {formError && (
-            <div className="border border-red bg-[rgba(226,88,92,0.14)] text-red rounded-lg px-3 py-2.5 text-xs mb-3">
-              {formError}
+          <form onSubmit={handleSubmit(onSubmit)}>
+            <div className="flex flex-col gap-2.5">
+              <div>
+                <label className={labelClass}>Vehicle</label>
+                <select
+                  value={watch('vehicleId')}
+                  onChange={e => setValue('vehicleId', e.target.value, { shouldValidate: true })}
+                  className={inputClass}
+                >
+                  <option value="">Select vehicle...</option>
+                  {vehicles.filter(v => v.status !== 'Retired').map(v => (
+                    <option key={v.id} value={v.id}>{v.name}</option>
+                  ))}
+                </select>
+                {errors.vehicleId && <div className={fieldErrorClass}>{errors.vehicleId.message}</div>}
+              </div>
+              <div>
+                <label className={labelClass}>Service Type</label>
+                <input {...register('serviceType')} className={inputClass} />
+                {errors.serviceType && <div className={fieldErrorClass}>{errors.serviceType.message}</div>}
+              </div>
+              <div>
+                <label className={labelClass}>Cost</label>
+                <input type="number" {...register('cost')} className={inputClass} />
+                {errors.cost && <div className={fieldErrorClass}>{errors.cost.message}</div>}
+              </div>
+              <div>
+                <label className={labelClass}>Date</label>
+                <input {...register('date')} placeholder="MM/DD/YYYY" className={inputClass} />
+                {errors.date && <div className={fieldErrorClass}>{errors.date.message}</div>}
+              </div>
             </div>
-          )}
 
-          <div className="flex flex-col gap-2.5">
-            <div>
-              <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Vehicle</label>
-              <select value={formVehicleId} onChange={e => setFormVehicleId(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange">
-                <option value="">Select vehicle...</option>
-                {vehicles.filter(v => v.status !== 'Retired').map(v => (
-                  <option key={v.id} value={v.id}>{v.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Service Type</label>
-              <input value={formServiceType} onChange={e => setFormServiceType(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
-            </div>
-            <div>
-              <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Cost</label>
-              <input type="number" value={formCost} onChange={e => setFormCost(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
-            </div>
-            <div>
-              <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Date</label>
-              <input value={formDate} onChange={e => setFormDate(e.target.value)} placeholder="MM/DD/YYYY" className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
-            </div>
-          </div>
-
-          <button
-            onClick={handleSave}
-            className="bg-orange text-[#1a0f02] border-none py-2 px-3.5 rounded-md font-bold text-[12.5px] cursor-pointer hover:bg-orange-hover transition-colors mt-3.5"
-          >
-            Save
-          </button>
+            {canManageFleet && (
+              <button
+                type="submit"
+                className="bg-orange text-[#1a0f02] border-none py-2 px-3.5 rounded-md font-bold text-[12.5px] cursor-pointer hover:bg-orange-hover transition-colors mt-3.5"
+              >
+                Save
+              </button>
+            )}
+          </form>
 
           {/* Status transitions */}
           <div className="mt-5">
@@ -112,7 +132,7 @@ export const MaintenancePage: React.FC = () => {
                   <td className="py-2.5 px-2 border-b border-border-soft">
                     <div className="flex items-center gap-2">
                       <StatusPill status={log.status} />
-                      {log.status === 'In Shop' && (
+                      {canManageFleet && log.status === 'In Shop' && (
                         <button
                           onClick={() => completeRecord(log.id)}
                           className="bg-green/20 text-green border-none py-0.5 px-2 rounded text-[10px] font-bold cursor-pointer hover:bg-green/30"

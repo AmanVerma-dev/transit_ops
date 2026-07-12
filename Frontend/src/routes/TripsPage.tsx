@@ -1,40 +1,60 @@
 import React, { useState, useMemo } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useTripsStore } from '../store/useTripsStore';
 import { useFleetStore } from '../store/useFleetStore';
 import { useDriversStore } from '../store/useDriversStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { StatusPill } from '../components/shared/StatusPill';
 import { isLicenseExpired } from '../lib/calculations';
+import { getPermission } from '../lib/rbac';
 import { X } from 'lucide-react';
+import { tripSchema, type TripFormValues } from '../schemas/tripSchema';
 
 export const TripsPage: React.FC = () => {
   const { trips, createTrip, dispatchTrip, completeTrip, cancelTrip } = useTripsStore();
   const { vehicles, getAvailableVehicles } = useFleetStore();
   const { drivers, getAvailableDrivers } = useDriversStore();
+  const userRole = useAuthStore(s => s.user?.role);
+  const canManageTrips = userRole ? getPermission(userRole, 'trips') === 'full' : false;
 
-  // Create Trip form
-  const [source, setSource] = useState('Gandhinagar Depot');
-  const [destination, setDestination] = useState('Ahmedabad Hub');
-  const [selectedVehicleId, setSelectedVehicleId] = useState('');
-  const [selectedDriverId, setSelectedDriverId] = useState('');
-  const [cargoWeight, setCargoWeight] = useState('');
-  const [plannedDistance, setPlannedDistance] = useState('');
-
-  // Complete trip dialog
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
   const [completingTripId, setCompletingTripId] = useState('');
   const [finalOdometer, setFinalOdometer] = useState('');
   const [fuelConsumed, setFuelConsumed] = useState('');
+  const [submitError, setSubmitError] = useState('');
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<TripFormValues>({
+    resolver: zodResolver(tripSchema),
+    defaultValues: {
+      source: 'Gandhinagar Depot',
+      destination: 'Ahmedabad Hub',
+      vehicleId: '',
+      driverId: '',
+      cargoWeight: '',
+      plannedDistance: '',
+    },
+  });
 
   const availableVehicles = getAvailableVehicles();
   const availableDrivers = getAvailableDrivers();
 
+  const selectedVehicleId = watch('vehicleId');
+  const selectedDriverId = watch('driverId');
   const selectedVehicle = vehicles.find(v => v.id === selectedVehicleId);
   const selectedDriver = drivers.find(d => d.id === selectedDriverId);
 
-  // Validation errors
+  // Cross-record validation (capacity / availability / licence) – runs after RHF.
   const validationErrors = useMemo(() => {
     const errors: string[] = [];
-    const weight = parseFloat(cargoWeight);
+    const weight = Number(watch('cargoWeight'));
 
     if (selectedVehicle && weight > selectedVehicle.capacity) {
       errors.push(`Vehicle Capacity: ${selectedVehicle.capacityLabel}\nCargo Weight: ${weight} kg\n✗ Capacity exceeded by ${weight - selectedVehicle.capacity} kg — dispatch blocked`);
@@ -49,29 +69,27 @@ export const TripsPage: React.FC = () => {
       errors.push(`✗ Driver ${selectedDriver.name} is not Available (${selectedDriver.status}) — dispatch blocked`);
     }
     return errors;
-  }, [selectedVehicleId, selectedDriverId, cargoWeight, selectedVehicle, selectedDriver]);
+  }, [selectedVehicleId, selectedDriverId, selectedVehicle, selectedDriver, watch('cargoWeight')]);
 
-  const canDispatch = source && destination && selectedVehicleId && selectedDriverId &&
-    cargoWeight && plannedDistance && validationErrors.length === 0;
-
-  const handleCreateAndDispatch = () => {
-    if (!canDispatch) return;
+  const onSubmit = (values: TripFormValues) => {
+    setSubmitError('');
+    if (validationErrors.length > 0) {
+      setSubmitError(validationErrors.join('\n'));
+      return;
+    }
     createTrip({
-      source,
-      destination,
-      vehicleId: selectedVehicleId,
-      driverId: selectedDriverId,
-      cargoWeight: parseFloat(cargoWeight),
-      plannedDistance: parseFloat(plannedDistance),
-      eta: `${Math.round(parseFloat(plannedDistance) / 60 * 60)} min`,
+      source: values.source,
+      destination: values.destination,
+      vehicleId: values.vehicleId,
+      driverId: values.driverId,
+      cargoWeight: Number(values.cargoWeight),
+      plannedDistance: Number(values.plannedDistance),
+      eta: `${Math.round(Number(values.plannedDistance) / 60 * 60)} min`,
     });
     // Dispatch the last created trip
     const lastTrip = useTripsStore.getState().trips[useTripsStore.getState().trips.length - 1];
     dispatchTrip(lastTrip.id);
-
-    // Reset form
-    setSource(''); setDestination(''); setSelectedVehicleId('');
-    setSelectedDriverId(''); setCargoWeight(''); setPlannedDistance('');
+    reset();
   };
 
   const handleComplete = (tripId: string) => {
@@ -91,6 +109,11 @@ export const TripsPage: React.FC = () => {
   const getDriverName = (id: string | null) => drivers.find(d => d.id === id)?.name || 'Unassigned';
 
   const lifecycleSteps = ['Draft', 'Dispatched', 'Completed', 'Cancelled'];
+
+  const inputClass =
+    'w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange';
+  const labelClass = 'text-[10px] uppercase text-text-faint tracking-wider mb-1 block';
+  const fieldErrorClass = 'text-red text-[11px] mt-1';
 
   return (
     <div>
@@ -116,71 +139,82 @@ export const TripsPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-[1.6fr_1fr] gap-4">
-        {/* Create Trip Form */}
-        <div className="bg-panel-2 border border-border rounded-lg p-3.5">
-          <div className="text-xs text-text-dim uppercase tracking-wider mb-3 font-bold">Create Trip</div>
-          <div className="flex flex-col gap-2.5">
-            <div>
-              <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Source</label>
-              <input value={source} onChange={e => setSource(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
-            </div>
-            <div>
-              <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Destination</label>
-              <input value={destination} onChange={e => setDestination(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
-            </div>
-            <div>
-              <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Vehicle (Available only)</label>
-              <select value={selectedVehicleId} onChange={e => setSelectedVehicleId(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange">
-                <option value="">Select vehicle...</option>
-                {availableVehicles.map(v => (
-                  <option key={v.id} value={v.id}>{v.name} · {v.capacityLabel} capacity</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Driver (Available only)</label>
-              <select value={selectedDriverId} onChange={e => setSelectedDriverId(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange">
-                <option value="">Select driver...</option>
-                {availableDrivers.map(d => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Cargo Weight (kg)</label>
-              <input type="number" value={cargoWeight} onChange={e => setCargoWeight(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
-            </div>
-            <div>
-              <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Planned Distance (km)</label>
-              <input type="number" value={plannedDistance} onChange={e => setPlannedDistance(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
-            </div>
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-[1.6fr_1fr] gap-4">
+        {canManageTrips && (
+          <div className="bg-panel-2 border border-border rounded-lg p-3.5">
+            <div className="text-xs text-text-dim uppercase tracking-wider mb-3 font-bold">Create Trip</div>
+            <form onSubmit={handleSubmit(onSubmit)}>
+              <div className="flex flex-col gap-2.5">
+                <div>
+                  <label className={labelClass}>Source</label>
+                  <input {...register('source')} className={inputClass} />
+                  {errors.source && <div className={fieldErrorClass}>{errors.source.message}</div>}
+                </div>
+                <div>
+                  <label className={labelClass}>Destination</label>
+                  <input {...register('destination')} className={inputClass} />
+                  {errors.destination && <div className={fieldErrorClass}>{errors.destination.message}</div>}
+                </div>
+                <div>
+                  <label className={labelClass}>Vehicle (Available only)</label>
+                  <select
+                    value={selectedVehicleId}
+                    onChange={e => setValue('vehicleId', e.target.value, { shouldValidate: true })}
+                    className={inputClass}
+                  >
+                    <option value="">Select vehicle...</option>
+                    {availableVehicles.map(v => (
+                      <option key={v.id} value={v.id}>{v.name} · {v.capacityLabel} capacity</option>
+                    ))}
+                  </select>
+                  {errors.vehicleId && <div className={fieldErrorClass}>{errors.vehicleId.message}</div>}
+                </div>
+                <div>
+                  <label className={labelClass}>Driver (Available only)</label>
+                  <select
+                    value={selectedDriverId}
+                    onChange={e => setValue('driverId', e.target.value, { shouldValidate: true })}
+                    className={inputClass}
+                  >
+                    <option value="">Select driver...</option>
+                    {availableDrivers.map(d => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                  {errors.driverId && <div className={fieldErrorClass}>{errors.driverId.message}</div>}
+                </div>
+                <div>
+                  <label className={labelClass}>Cargo Weight (kg)</label>
+                  <input type="number" {...register('cargoWeight')} className={inputClass} />
+                  {errors.cargoWeight && <div className={fieldErrorClass}>{errors.cargoWeight.message}</div>}
+                </div>
+                <div>
+                  <label className={labelClass}>Planned Distance (km)</label>
+                  <input type="number" {...register('plannedDistance')} className={inputClass} />
+                  {errors.plannedDistance && <div className={fieldErrorClass}>{errors.plannedDistance.message}</div>}
+                </div>
+              </div>
 
-          {/* Validation errors */}
-          {validationErrors.length > 0 && (
-            <div className="border border-red bg-[rgba(226,88,92,0.14)] text-red rounded-lg px-3.5 py-3 text-xs mt-3.5 whitespace-pre-line">
-              {validationErrors.join('\n')}
-            </div>
-          )}
+              {submitError && (
+                <div className="border border-red bg-[rgba(226,88,92,0.14)] text-red rounded-lg px-3.5 py-3 text-xs mt-3.5 whitespace-pre-line">
+                  {submitError}
+                </div>
+              )}
 
-          <div className="flex gap-2.5 mt-3.5">
-            <button
-              onClick={handleCreateAndDispatch}
-              disabled={!canDispatch}
-              className={`border-none py-2 px-3.5 rounded-md font-bold text-[12.5px] cursor-pointer transition-colors ${
-                canDispatch
-                  ? 'bg-orange text-[#1a0f02] hover:bg-orange-hover'
-                  : 'bg-transparent text-text-dim border border-border opacity-50 cursor-not-allowed'
-              }`}
-            >
-              {canDispatch ? 'Dispatch' : 'Dispatch (disabled)'}
-            </button>
-            <button className="bg-panel-2 text-text-dim border border-border py-2 px-3.5 rounded-md text-[12.5px] cursor-pointer hover:text-text transition-colors">
-              Cancel
-            </button>
+              <div className="flex gap-2.5 mt-3.5">
+                <button
+                  type="submit"
+                  className="bg-orange text-[#1a0f02] border-none py-2 px-3.5 rounded-md font-bold text-[12.5px] cursor-pointer hover:bg-orange-hover transition-colors"
+                >
+                  Dispatch
+                </button>
+                <button type="button" onClick={() => reset()} className="bg-panel-2 text-text-dim border border-border py-2 px-3.5 rounded-md text-[12.5px] cursor-pointer hover:text-text transition-colors">
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
-        </div>
+        )}
 
         {/* Live Board */}
         <div className="bg-panel-2 border border-border rounded-lg p-3.5">
@@ -199,13 +233,13 @@ export const TripsPage: React.FC = () => {
                 <span>{trip.eta || ''}</span>
               </div>
               {/* Action buttons */}
-              {trip.status === 'Draft' && (
+              {canManageTrips && trip.status === 'Draft' && (
                 <div className="flex gap-2 mt-2">
                   <button onClick={() => dispatchTrip(trip.id)} className="bg-blue/20 text-blue border-none py-1 px-2 rounded text-[10px] font-bold cursor-pointer hover:bg-blue/30">Dispatch</button>
                   <button onClick={() => cancelTrip(trip.id)} className="bg-red/20 text-red border-none py-1 px-2 rounded text-[10px] font-bold cursor-pointer hover:bg-red/30">Cancel</button>
                 </div>
               )}
-              {trip.status === 'Dispatched' && (
+              {canManageTrips && trip.status === 'Dispatched' && (
                 <div className="flex gap-2 mt-2">
                   <button onClick={() => handleComplete(trip.id)} className="bg-green/20 text-green border-none py-1 px-2 rounded text-[10px] font-bold cursor-pointer hover:bg-green/30">Complete</button>
                   <button onClick={() => cancelTrip(trip.id)} className="bg-red/20 text-red border-none py-1 px-2 rounded text-[10px] font-bold cursor-pointer hover:bg-red/30">Cancel</button>

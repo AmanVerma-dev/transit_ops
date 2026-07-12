@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { RBAC_MATRIX } from '../lib/rbac';
+import { useSettingsStore } from '../store/useSettingsStore';
 
 export const SettingsPage: React.FC = () => {
-  const [depotName, setDepotName] = useState('Gandhinagar Depot ADV');
-  const [currency, setCurrency] = useState('INR (₹)');
-  const [distanceUnit, setDistanceUnit] = useState('Kilometers');
+  const { depotName, currency, distanceUnit, setDepotName, setCurrency, setDistanceUnit } = useSettingsStore();
   const [saved, setSaved] = useState(false);
 
   const handleSave = () => {
@@ -22,7 +21,7 @@ export const SettingsPage: React.FC = () => {
     <div>
       <h1 className="text-base font-bold mb-4">Settings &amp; RBAC</h1>
 
-      <div className="grid grid-cols-[1.6fr_1fr] gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-[1.6fr_1fr] gap-4">
         {/* General Settings */}
         <div className="bg-panel-2 border border-border rounded-lg p-3.5">
           <div className="text-xs text-text-dim uppercase tracking-wider mb-3 font-bold">General</div>

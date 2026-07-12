@@ -90,7 +90,7 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* KPI Row */}
-      <div className="grid grid-cols-7 gap-2.5 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2.5 mb-4">
         <KpiCard label="Active Vehicles" value={padNumber(activeVehicles)} />
         <KpiCard label="Available Vehicles" value={padNumber(availableVehicles)} />
         <KpiCard label="Vehicles in Maintenance" value={padNumber(inMaintenance)} color="amber" />
@@ -101,7 +101,7 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* Grid: Recent Trips + Vehicle Status */}
-      <div className="grid grid-cols-[1.6fr_1fr] gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-[1.6fr_1fr] gap-4">
         {/* Recent Trips */}
         <div className="bg-panel-2 border border-border rounded-lg p-3.5">
           <div className="text-xs text-text-dim uppercase tracking-wider mb-3 font-bold">

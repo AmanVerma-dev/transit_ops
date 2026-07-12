@@ -1,27 +1,45 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
+import { getDefaultRoute } from '../lib/rbac';
 import type { Role } from '../types';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const login = useAuthStore(s => s.login);
+  const { isAuthenticated, login } = useAuthStore();
+
+  // Redirect authenticated users away from login
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate(getDefaultRoute('Dispatcher'), { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<Role>('Dispatcher');
   const [showError, setShowError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
+      setErrorMessage('Please enter both email and password.');
       setShowError(true);
       return;
     }
     setShowError(false);
-    login(email, role);
-    navigate('/dashboard');
+    setIsLoading(true);
+    const result = await login(email, password);
+    setIsLoading(false);
+    if (result.success) {
+      navigate('/dashboard');
+    } else {
+      setErrorMessage(result.error || 'Invalid credentials. Please check your email and password, or contact your admin if your account is locked.');
+      setShowError(true);
+    }
   };
 
   return (
@@ -48,7 +66,7 @@ export const LoginPage: React.FC = () => {
 
         {showError && (
           <div className="border border-red bg-[rgba(226,88,92,0.14)] text-red rounded-lg px-3.5 py-3 text-xs mb-4">
-            Invalid credentials. Please check your email and password, or contact your admin if your account is locked.
+            {errorMessage}
           </div>
         )}
 
@@ -106,9 +124,10 @@ export const LoginPage: React.FC = () => {
 
           <button
             type="submit"
-            className="w-full bg-orange text-[#1a0f02] border-none py-3 rounded-md font-bold text-[12.5px] cursor-pointer hover:bg-orange-hover transition-colors"
+            disabled={isLoading}
+            className="w-full bg-orange text-[#1a0f02] border-none py-3 rounded-md font-bold text-[12.5px] cursor-pointer hover:bg-orange-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Sign In
+            {isLoading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
 

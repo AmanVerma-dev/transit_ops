@@ -1,22 +1,33 @@
 import React, { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useDriversStore } from '../store/useDriversStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { StatusPill } from '../components/shared/StatusPill';
 import { isLicenseExpired } from '../lib/calculations';
 import type { LicenseCategory, DriverStatus } from '../types';
 import { X } from 'lucide-react';
+import { getPermission } from '../lib/rbac';
+import { driverSchema, LICENSE_CATEGORIES, type DriverFormValues } from '../schemas/driverSchema';
 
 export const DriversPage: React.FC = () => {
   const { drivers, addDriver } = useDriversStore();
+  const userRole = useAuthStore(s => s.user?.role);
+  const canManageDrivers = userRole ? getPermission(userRole, 'drivers') === 'full' : false;
   const [searchQuery, setSearchQuery] = useState('');
   const [showDialog, setShowDialog] = useState(false);
 
-  // Form state
-  const [formName, setFormName] = useState('');
-  const [formLicense, setFormLicense] = useState('');
-  const [formCategory, setFormCategory] = useState<LicenseCategory>('LMV');
-  const [formExpiry, setFormExpiry] = useState('');
-  const [formContact, setFormContact] = useState('');
-  const [formError, setFormError] = useState('');
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<DriverFormValues>({
+    resolver: zodResolver(driverSchema),
+    defaultValues: { name: '', licenseNo: '', category: 'LMV', licenseExpiry: '', contact: '' },
+  });
 
   const filteredDrivers = drivers.filter(d => {
     if (searchQuery && !d.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
@@ -24,30 +35,25 @@ export const DriversPage: React.FC = () => {
     return true;
   });
 
-  const handleAddDriver = () => {
-    setFormError('');
-    if (!formName || !formLicense || !formExpiry || !formContact) {
-      setFormError('All fields are required.');
-      return;
-    }
-    // Validate expiry format MM/YYYY
-    if (!/^\d{2}\/\d{4}$/.test(formExpiry)) {
-      setFormError('License expiry must be in MM/YYYY format.');
-      return;
-    }
+  const onSubmit = (values: DriverFormValues) => {
     addDriver({
-      name: formName,
-      licenseNo: formLicense,
-      category: formCategory,
-      licenseExpiry: formExpiry,
-      contact: formContact,
+      name: values.name,
+      licenseNo: values.licenseNo,
+      category: values.category as LicenseCategory,
+      licenseExpiry: values.licenseExpiry,
+      contact: values.contact,
       tripCompletion: 0,
       safetyScore: 100,
       status: 'Available' as DriverStatus,
     });
+    reset();
     setShowDialog(false);
-    setFormName(''); setFormLicense(''); setFormExpiry(''); setFormContact('');
   };
+
+  const inputClass =
+    'w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange';
+  const labelClass = 'text-[10px] uppercase text-text-faint tracking-wider mb-1 block';
+  const fieldErrorClass = 'text-red text-[11px] mt-1';
 
   return (
     <div>
@@ -62,12 +68,14 @@ export const DriversPage: React.FC = () => {
           className="bg-panel-2 border border-border text-text-dim py-[7px] px-2.5 rounded-md text-xs outline-none"
         />
         <div className="flex-1" />
-        <button
-          onClick={() => setShowDialog(true)}
-          className="bg-orange text-[#1a0f02] border-none py-2 px-3.5 rounded-md font-bold text-[12.5px] cursor-pointer hover:bg-orange-hover transition-colors"
-        >
-          + Add Driver
-        </button>
+        {canManageDrivers && (
+          <button
+            onClick={() => setShowDialog(true)}
+            className="bg-orange text-[#1a0f02] border-none py-2 px-3.5 rounded-md font-bold text-[12.5px] cursor-pointer hover:bg-orange-hover transition-colors"
+          >
+            + Add Driver
+          </button>
+        )}
       </div>
 
       {/* Table */}
@@ -124,46 +132,52 @@ export const DriversPage: React.FC = () => {
               </button>
             </div>
 
-            {formError && (
-              <div className="border border-red bg-[rgba(226,88,92,0.14)] text-red rounded-lg px-3 py-2.5 text-xs mb-3">
-                {formError}
+            <form onSubmit={handleSubmit(onSubmit)}>
+              <div className="flex flex-col gap-3">
+                <div>
+                  <label className={labelClass}>Name</label>
+                  <input {...register('name')} className={inputClass} />
+                  {errors.name && <div className={fieldErrorClass}>{errors.name.message}</div>}
+                </div>
+                <div>
+                  <label className={labelClass}>License No.</label>
+                  <input {...register('licenseNo')} className={inputClass} />
+                  {errors.licenseNo && <div className={fieldErrorClass}>{errors.licenseNo.message}</div>}
+                </div>
+                <div>
+                  <label className={labelClass}>Category</label>
+                  <select
+                    value={watch('category')}
+                    onChange={e => setValue('category', e.target.value as LicenseCategory, { shouldValidate: true })}
+                    className={inputClass}
+                  >
+                    {LICENSE_CATEGORIES.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                  {errors.category && <div className={fieldErrorClass}>{errors.category.message}</div>}
+                </div>
+                <div>
+                  <label className={labelClass}>License Expiry (MM/YYYY)</label>
+                  <input {...register('licenseExpiry')} placeholder="MM/YYYY" className={inputClass} />
+                  {errors.licenseExpiry && <div className={fieldErrorClass}>{errors.licenseExpiry.message}</div>}
+                </div>
+                <div>
+                  <label className={labelClass}>Contact</label>
+                  <input {...register('contact')} className={inputClass} />
+                  {errors.contact && <div className={fieldErrorClass}>{errors.contact.message}</div>}
+                </div>
               </div>
-            )}
 
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Name</label>
-                <input value={formName} onChange={e => setFormName(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
+              <div className="flex gap-2.5 mt-4">
+                <button type="submit" className="bg-orange text-[#1a0f02] border-none py-2 px-4 rounded-md font-bold text-[12.5px] cursor-pointer hover:bg-orange-hover transition-colors">
+                  Save Driver
+                </button>
+                <button type="button" onClick={() => setShowDialog(false)} className="bg-panel-2 text-text-dim border border-border py-2 px-4 rounded-md text-[12.5px] cursor-pointer hover:text-text transition-colors">
+                  Cancel
+                </button>
               </div>
-              <div>
-                <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">License No.</label>
-                <input value={formLicense} onChange={e => setFormLicense(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
-              </div>
-              <div>
-                <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Category</label>
-                <select value={formCategory} onChange={e => setFormCategory(e.target.value as LicenseCategory)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange">
-                  <option>LMV</option>
-                  <option>HMV</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">License Expiry (MM/YYYY)</label>
-                <input value={formExpiry} onChange={e => setFormExpiry(e.target.value)} placeholder="MM/YYYY" className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
-              </div>
-              <div>
-                <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Contact</label>
-                <input value={formContact} onChange={e => setFormContact(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
-              </div>
-            </div>
-
-            <div className="flex gap-2.5 mt-4">
-              <button onClick={handleAddDriver} className="bg-orange text-[#1a0f02] border-none py-2 px-4 rounded-md font-bold text-[12.5px] cursor-pointer hover:bg-orange-hover transition-colors">
-                Save Driver
-              </button>
-              <button onClick={() => setShowDialog(false)} className="bg-panel-2 text-text-dim border border-border py-2 px-4 rounded-md text-[12.5px] cursor-pointer hover:text-text transition-colors">
-                Cancel
-              </button>
-            </div>
+            </form>
           </div>
         </div>
       )}

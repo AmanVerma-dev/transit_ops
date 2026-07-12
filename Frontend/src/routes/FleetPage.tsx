@@ -1,25 +1,36 @@
 import React, { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useFleetStore } from '../store/useFleetStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { StatusPill } from '../components/shared/StatusPill';
 import { formatCurrency } from '../lib/calculations';
 import type { VehicleType, VehicleStatus } from '../types';
 import { X } from 'lucide-react';
+import { getPermission } from '../lib/rbac';
+import { vehicleSchema, VEHICLE_TYPES, type VehicleFormValues } from '../schemas/vehicleSchema';
 
 export const FleetPage: React.FC = () => {
   const { vehicles, addVehicle, isRegNoUnique } = useFleetStore();
+  const userRole = useAuthStore(s => s.user?.role);
+  const canManageFleet = userRole ? getPermission(userRole, 'fleet') === 'full' : false;
   const [typeFilter, setTypeFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [showDialog, setShowDialog] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
-  // Form state
-  const [formRegNo, setFormRegNo] = useState('');
-  const [formName, setFormName] = useState('');
-  const [formType, setFormType] = useState<VehicleType>('Van');
-  const [formCapacity, setFormCapacity] = useState('');
-  const [formOdometer, setFormOdometer] = useState('');
-  const [formCost, setFormCost] = useState('');
-  const [formError, setFormError] = useState('');
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<VehicleFormValues>({
+    resolver: zodResolver(vehicleSchema),
+    defaultValues: { regNo: '', name: '', type: 'Van', capacity: '', odometer: '', acquisitionCost: '' },
+  });
 
   const filteredVehicles = vehicles.filter(v => {
     if (typeFilter !== 'All' && v.type !== typeFilter) return false;
@@ -28,30 +39,31 @@ export const FleetPage: React.FC = () => {
     return true;
   });
 
-  const handleAddVehicle = () => {
-    setFormError('');
-    if (!formRegNo || !formName || !formCapacity || !formOdometer || !formCost) {
-      setFormError('All fields are required.');
+  const onSubmit = (values: VehicleFormValues) => {
+    setSubmitError('');
+    if (!isRegNoUnique(values.regNo)) {
+      setSubmitError('Registration number must be unique.');
       return;
     }
-    if (!isRegNoUnique(formRegNo)) {
-      setFormError('Registration number must be unique.');
-      return;
-    }
-    const cap = parseFloat(formCapacity);
+    const cap = Number(values.capacity);
     addVehicle({
-      regNo: formRegNo,
-      name: formName,
-      type: formType,
+      regNo: values.regNo,
+      name: values.name,
+      type: values.type as VehicleType,
       capacity: cap,
       capacityLabel: cap >= 1000 ? `${cap / 1000} Ton` : `${cap} kg`,
-      odometer: parseInt(formOdometer),
-      acquisitionCost: parseInt(formCost),
+      odometer: Number(values.odometer),
+      acquisitionCost: Number(values.acquisitionCost),
       status: 'Available' as VehicleStatus,
     });
+    reset();
     setShowDialog(false);
-    setFormRegNo(''); setFormName(''); setFormCapacity(''); setFormOdometer(''); setFormCost('');
   };
+
+  const inputClass =
+    'w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange';
+  const labelClass = 'text-[10px] uppercase text-text-faint tracking-wider mb-1 block';
+  const fieldErrorClass = 'text-red text-[11px] mt-1';
 
   return (
     <div>
@@ -87,12 +99,14 @@ export const FleetPage: React.FC = () => {
           className="bg-panel-2 border border-border text-text-dim py-[7px] px-2.5 rounded-md text-xs outline-none"
         />
         <div className="flex-1" />
-        <button
-          onClick={() => setShowDialog(true)}
-          className="bg-orange text-[#1a0f02] border-none py-2 px-3.5 rounded-md font-bold text-[12.5px] cursor-pointer hover:bg-orange-hover transition-colors"
-        >
-          + Add Vehicle
-        </button>
+        {canManageFleet && (
+          <button
+            onClick={() => setShowDialog(true)}
+            className="bg-orange text-[#1a0f02] border-none py-2 px-3.5 rounded-md font-bold text-[12.5px] cursor-pointer hover:bg-orange-hover transition-colors"
+          >
+            + Add Vehicle
+          </button>
+        )}
       </div>
 
       {/* Table */}
@@ -125,7 +139,7 @@ export const FleetPage: React.FC = () => {
       </div>
 
       {/* Add Vehicle Dialog */}
-      {showDialog && (
+      {canManageFleet && showDialog && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-panel border border-border rounded-lg p-6 w-[420px] max-h-[90vh] overflow-auto">
             <div className="flex justify-between items-center mb-4">
@@ -135,52 +149,63 @@ export const FleetPage: React.FC = () => {
               </button>
             </div>
 
-            {formError && (
-              <div className="border border-red bg-[rgba(226,88,92,0.14)] text-red rounded-lg px-3 py-2.5 text-xs mb-3">
-                {formError}
-              </div>
-            )}
+            <form onSubmit={handleSubmit(onSubmit)}>
+              {submitError && (
+                <div className="border border-red bg-[rgba(226,88,92,0.14)] text-red rounded-lg px-3 py-2.5 text-xs mb-3">
+                  {submitError}
+                </div>
+              )}
 
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Registration No.</label>
-                <input value={formRegNo} onChange={e => setFormRegNo(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
+              <div className="flex flex-col gap-3">
+                <div>
+                  <label className={labelClass}>Registration No.</label>
+                  <input {...register('regNo')} className={inputClass} />
+                  {errors.regNo && <div className={fieldErrorClass}>{errors.regNo.message}</div>}
+                </div>
+                <div>
+                  <label className={labelClass}>Name/Model</label>
+                  <input {...register('name')} className={inputClass} />
+                  {errors.name && <div className={fieldErrorClass}>{errors.name.message}</div>}
+                </div>
+                <div>
+                  <label className={labelClass}>Type</label>
+                  <select
+                    value={watch('type')}
+                    onChange={e => setValue('type', e.target.value as VehicleType, { shouldValidate: true })}
+                    className={inputClass}
+                  >
+                    {VEHICLE_TYPES.map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                  {errors.type && <div className={fieldErrorClass}>{errors.type.message}</div>}
+                </div>
+                <div>
+                  <label className={labelClass}>Capacity (kg)</label>
+                  <input type="number" {...register('capacity')} className={inputClass} />
+                  {errors.capacity && <div className={fieldErrorClass}>{errors.capacity.message}</div>}
+                </div>
+                <div>
+                  <label className={labelClass}>Odometer</label>
+                  <input type="number" {...register('odometer')} className={inputClass} />
+                  {errors.odometer && <div className={fieldErrorClass}>{errors.odometer.message}</div>}
+                </div>
+                <div>
+                  <label className={labelClass}>Acquisition Cost</label>
+                  <input type="number" {...register('acquisitionCost')} className={inputClass} />
+                  {errors.acquisitionCost && <div className={fieldErrorClass}>{errors.acquisitionCost.message}</div>}
+                </div>
               </div>
-              <div>
-                <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Name/Model</label>
-                <input value={formName} onChange={e => setFormName(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
-              </div>
-              <div>
-                <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Type</label>
-                <select value={formType} onChange={e => setFormType(e.target.value as VehicleType)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange">
-                  <option>Van</option>
-                  <option>Truck</option>
-                  <option>Mini</option>
-                  <option>Bus</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Capacity (kg)</label>
-                <input type="number" value={formCapacity} onChange={e => setFormCapacity(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
-              </div>
-              <div>
-                <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Odometer</label>
-                <input type="number" value={formOdometer} onChange={e => setFormOdometer(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
-              </div>
-              <div>
-                <label className="text-[10px] uppercase text-text-faint tracking-wider mb-1 block">Acquisition Cost</label>
-                <input type="number" value={formCost} onChange={e => setFormCost(e.target.value)} className="w-full bg-bg border border-border text-text py-2 px-2.5 rounded-md text-[12.5px] outline-none focus:border-orange" />
-              </div>
-            </div>
 
-            <div className="flex gap-2.5 mt-4">
-              <button onClick={handleAddVehicle} className="bg-orange text-[#1a0f02] border-none py-2 px-4 rounded-md font-bold text-[12.5px] cursor-pointer hover:bg-orange-hover transition-colors">
-                Save Vehicle
-              </button>
-              <button onClick={() => setShowDialog(false)} className="bg-panel-2 text-text-dim border border-border py-2 px-4 rounded-md text-[12.5px] cursor-pointer hover:text-text transition-colors">
-                Cancel
-              </button>
-            </div>
+              <div className="flex gap-2.5 mt-4">
+                <button type="submit" className="bg-orange text-[#1a0f02] border-none py-2 px-4 rounded-md font-bold text-[12.5px] cursor-pointer hover:bg-orange-hover transition-colors">
+                  Save Vehicle
+                </button>
+                <button type="button" onClick={() => setShowDialog(false)} className="bg-panel-2 text-text-dim border border-border py-2 px-4 rounded-md text-[12.5px] cursor-pointer hover:text-text transition-colors">
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

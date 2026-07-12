@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/useAuthStore';
 import { getAccessibleNavItems } from '../../lib/rbac';
@@ -31,6 +31,13 @@ export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const user = useAuthStore(s => s.user);
   const [collapsed, setCollapsed] = useState(false);
+
+  // Auto-collapse to icon-only below 768px (manual toggle still works).
+  useEffect(() => {
+    if (window.matchMedia('(max-width: 768px)').matches) {
+      setCollapsed(true);
+    }
+  }, []);
 
   const navItems = user ? getAccessibleNavItems(user.role) : [];
 
