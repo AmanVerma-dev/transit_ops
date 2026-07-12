@@ -8,7 +8,6 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str = Field(min_length=8)
-    role_name: str = "Driver" # Default role if none provided
 
 class UserResponse(UserBase):
     id: int

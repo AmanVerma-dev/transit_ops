@@ -18,11 +18,11 @@ class AuthService:
                 detail="The user with this email already exists in the system.",
             )
         
-        role = self.role_repo.get_by_name(name=user_in.role_name)
+        role = self.role_repo.get_by_name(name="Driver")
         if not role:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Role '{user_in.role_name}' does not exist.",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Default role 'Driver' does not exist in the system.",
             )
 
         user = User(
